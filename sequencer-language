@@ -1,0 +1,146 @@
+"The following file provides working documentation of how a live midi-
+programming language might look. The intention is that you should be
+able to run this file through the application and play its contents.
+
+*** THESE ARE IDEAS! ***
+Basic components are pretty well established but the further down the
+document you go, the more experimental the language becomes.
+***
+
+Let's introduce the components of this language.
+
+Anything that appears between double quotes is ignored by the parser.
+In other words, quoted strings are comments.
+
+Comments of this kind can span multiple lines
+
+A closing quote must appear immediately after a character that isn't
+another quote and must be followed by a whitespace character, otherwise
+it will be ignored.
+
+"We're still within a comment...
+
+Single line comments can be started with a doublestroke - // - and are
+also provided to make it easy to disable a line during live coding, or
+testing.  // Everything here would be a comment.
+
+The language is based around the idea of generators (pretty much all
+combinators in the language are generators).  Each generator can accept
+a list of primitives (notes, intervals, timings, etc) and combine them
+with another list of primitives to produce a third resultant list.  This
+resultant list can then be combined with another list, and so on,
+allowing complex patterns to be built.
+
+The language uses infix notation, meaning that each generator can have at
+most 2 arguments, one to its left and the other to its right. The
+resultant combination implicitly becomes the left argument of the next
+generator, and so on until all generators have been run.
+
+The final result will go to the output stream to be played by an
+instrument."
+
+"Primitives"
+""""""""""""
+
+notes:      letter (a-g) optionally followed by number denoting octave,
+            optionally followed by sharp/flat modifier (e.g. g3 c4 a1, f3#, e2b)
+intervals:  number preceded by . and optionally followed by + or - number of
+            octaves (e.g. .0 .4+2 .7-1)
+chords:     notes or intervals joined without spaces (e.g. c3e3bg3 .0.3.7)
+            (I may not bother with these. It maybe just as useful to produce
+            chords via other means)
+length:     integer, optionally followed by letter (e.g. 1 2 3 4 8 32 4t 2d)
+            to denote a dotted, or triplet.
+rhythm:     beat (o) or rest (x) (e.g. ooox = beat beat beat rest)
+bpm:        integer followed immediately by bpm (e.g. 120bpm)
+lists:      any type between parentheses; lists are ordered
+            e.g. (1 2 3 4).
+buffers:    string preceded by $
+
+"At 80bpm, crotchets follow."
+(80bpm 4 c3 e3 g3 c4 x g3 e3 c3)
+
+"At 80bpm, crotchets notes follow, using intervals to denote notes."
+(80bpm 4 c3 .3 .5 .12 x .5 .3 .0)
+
+"At 80bpm, c3 major triad chord in crotchets, followed by c4 and c5
+in quavers, back to crotchets for descending arpeggio back to root
+following a rest"
+(80bpm 4 c3.4.7 8 .12 .24 4 x .7 .4 .0)
+
+"Combinators"
+"""""""""""""
+
+$a zip $b:  Merge each element of list $a with list $b
+$a perm $b: Permutate every element of list $b with each element of list
+            $a
+$a => $b:   Put $a to $b.  This combinator is used to create new
+            buffers.
+
+"Examples:"
+(c3 e3 f3) perm (.0 .4 .7 .12)
+
+  "=> (c3 .4 .7 .12
+       e3 .4 .7 .12
+       f3 .4 .7 .12)"
+
+(.0 .4 .7 .12) perm (c3 e3 f3)
+
+  "=> (c3   e3   f3
+       c3.4 e3.4 f3.4
+       c3.7 e3.7 f3.7
+       c3.12 e3.12 f3.12)"
+
+(c3 e3 f3) zip (c3 e3 f3)
+  "=> (c3 c3 e3 e3 f3 f3)"
+
+"Let's use what we have defined so far to produce a little tune:"
+
+"Twinkle Twinkle Little Star"
+(oooo ooox) => $rhythm
+(c3 .7 .9 .7 .5 .4 .2 .0) => $melody
+zip $melody
+zip $rhythm
+zip (8)
+
+"Here's a breakdown of what's going on"
+"$melody zip $melody
+  => (c3 c3 .7 .7 .9 .9 .7 .7 .5 .5 .4 .4 .2 .2 .0 .0) => $1
+$1 zip $rhythm
+  => (c3 c3 .7 .7 .9 .9 .7 x .5 .5 .4 .4 .2 .2 .0 x) => $2
+$2 zip (8)
+  => (8 c3 c3 .7 .7 .9 .9 .7 x .5 .5 .4 .4 .2 .2 .0 x)"
+
+"Here's a shorthand of the above using repeat-list notation"
+    (c3 .7 .9 .7 .5 .4 .2 .0)
+zip (..)
+zip (oooo ooox)
+zip (8)
+
+"An alternative formulation"
+(8 oooo ooox) zip (4 c3 .7 .9 .7 .5 .4 .2 .0)
+  //=> (8 c3 c3 .7 .7 .9 .9 .7 x .5 .5 .4 .4 .2 .2 .0 x)
+
+"If I want, I can append some variations.  The first phrase
+is still in the output buffer."
+
+:=    // The colon means, append the rhs to the buffer.
+      // The equals operator is a copy of the buffer
+zip (ooox)
+  // appends the following
+  //=> (8 c3 c3 .7 x .9 .9 .7 x .5 .5 .4 x .2 .2 .0 x)
+
+"You may want to make a copy of part of the buffer, rather than
+the whole thing.  Say you want to repeat the last bar (presuming
+there are 4 beats in a bar.  You can express this with the following:
+: 4=
+
+"If you have multiple operations you wish to perform on a
+buffer, you can encapsulate them in curly braces."
+(8 c3 c3 .7 x .9 .9 .7 x .5 .5 .4 x .2 .2 .0 x)
+: 4= {
+    (c3 .7 .9 .7 .5 .4 .2 .0)
+    zip (..)
+    zip (oooo ooox)
+    zip (8)
+}
