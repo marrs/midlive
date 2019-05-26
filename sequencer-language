@@ -51,7 +51,7 @@ chords:     notes or intervals joined without spaces (e.g. c3e3bg3 .0.3.7)
             (I may not bother with these. It maybe just as useful to produce
             chords via other means)
 length:     integer, optionally followed by letter to denote a dotted, or
-            triplet (e.g. 1 2 3 4 8 32 4t 2d).
+            triplet (e.g. 1 2 4 8 32 4t 2d).
 rhythm:     beat (o) or rest (x) (e.g. ooox = beat beat beat rest)
 bpm:        integer followed immediately by bpm (e.g. 120bpm)
 lists:      any type between parentheses; lists are ordered

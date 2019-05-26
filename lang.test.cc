@@ -1,4 +1,5 @@
 #include <cstring>
+#include <cstdlib>
 #include <cassert>
 #include <cstdio>
 #include <cwchar>
@@ -78,6 +79,25 @@ int main()
         test((int)prim.type).eq(1);
         test((int)prim.val).eq(60);
     });
+
+    test_case("normal length value", {
+        strcpy(buf, "4");
+        prim = lang_parse_length(buf);
+        test((int)prim.type).eq((int)LangTokenType::LengthNormal);
+        test((int)prim.val).eq(4);
+    })
+
+    test_case("dotted length value", {
+        strcpy(buf, "4d");
+        prim = lang_parse_length(buf);
+        test((int)prim.type).eq((int)LangTokenType::LengthDotted);
+    })
+
+    test_case("triplet length value", {
+        strcpy(buf, "4t");
+        prim = lang_parse_length(buf);
+        test((int)prim.type).eq((int)LangTokenType::LengthTriplet);
+    })
     printf("\n\nTests completed :)\n\n");
     return 0;
 }
