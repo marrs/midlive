@@ -142,9 +142,35 @@ struct LangLenToken {
     &&     *(CHPTR) != '\n'    \
     &&     *(CHPTR) != ' ')
 
+#define lang_abstract_parse_char(SWITCH_CASES) \
+        dbgmsg("Character '%c'", ch); \
+        if (is_char_type(rulePos->type, ch)) { \
+            dbgmsg(" matches char type %d\n", rulePos->type); \
+            switch (rulePos->type) SWITCH_CASES \
+            if (NULL != rulePos->next) { \
+                rulePos = rulePos->next; \
+                ++bufptr; \
+                continue; \
+            } else if (NULL != rulePos->alt) { \
+                rulePos = rulePos->alt; \
+                continue; \
+            } else { \
+                break; \
+            } \
+        } else { \
+            dbgmsg(" does not match char type %d.\n", rulePos->type); \
+            if (NULL == rulePos->alt) { \
+                return { LangTokenType::Error, -1 }; \
+            } else { \
+                rulePos = rulePos->alt; \
+                continue; \
+            } \
+        }
+
 LangPrimitive lang_parse_length(char *buf)
 {
     if (!is_char_type(LangCharType::Digit, *buf)) {
+lang_parse_length_default:
         return { LangTokenType::Error, -1};
     }
 
@@ -163,41 +189,20 @@ LangPrimitive lang_parse_length(char *buf)
     lang_scan_token(bufptr) {
         char ch = *bufptr;
         char *lenValPos = lenStr;
-        dbgmsg("Character '%c'", ch);
-        if (is_char_type(rulePos->type, ch)) {
-            dbgmsg(" matches char type %d\n", rulePos->type);
-            switch (rulePos->type) {
-                case LangCharLenType::Pos1:
-                case LangCharLenType::Pos2: {
-                    *lenValPos++ = ch;
-                } break;
-                case LangCharLenType::LengthMod: {
-                    if ('d' == ch) {
-                        type = LangTokenType::LengthDotted;
-                    } else if ('t' == ch) {
-                        type = LangTokenType::LengthTriplet;
-                    }
+        lang_abstract_parse_char({
+            case LangCharLenType::Pos1:
+            case LangCharLenType::Pos2: {
+                *lenValPos++ = ch;
+            } break;
+            case LangCharLenType::LengthMod: {
+                if ('d' == ch) {
+                    type = LangTokenType::LengthDotted;
+                } else if ('t' == ch) {
+                    type = LangTokenType::LengthTriplet;
                 }
-            }
-            if (NULL != rulePos->next) {
-                rulePos = rulePos->next;
-                ++bufptr;
-                continue;
-            } else if (NULL != rulePos->alt) {
-                rulePos = rulePos->alt;
-                continue;
-            } else {
-                break;
-            }
-        } else {
-            dbgmsg(" does not match char type %d.\n", rulePos->type);
-            if (NULL == rulePos->alt) {
-                return { LangTokenType::Error, -1 };
-            } else {
-                rulePos = rulePos->alt;
-                continue;
-            }
-        }
+            } break;
+            default: { goto lang_parse_length_default; }
+        });
     }
     lenVal = atoi(lenStr);
     return { type, lenVal };
@@ -223,43 +228,21 @@ LangPrimitive lang_parse_note(char *buf)
     char *bufptr = buf;
     lang_scan_token(bufptr) {
         char ch = *bufptr;
-        dbgmsg("Character '%c'", ch);
-        if (is_char_type(rulePos->type, ch)) {
-            dbgmsg(" matches char type %d\n", rulePos->type);
-            switch (rulePos->type) {
-                case LangCharType::NoteName: {
-                    val = note_to_midi(ch);
-                } break;
-                case LangCharType::Minus: {
-                    octaveSign = -1;
-                } break;
-                case LangCharType::Digit: {
-                    octave = atoi(&ch) * 12;
-                } break;
-                case LangCharType::SemitoneMod: {
-                    val += ch == '#'? 1 : -1;
-                } break;
-                default: break;
-            }
-            if (NULL != rulePos->next) {
-                rulePos = rulePos->next;
-                ++bufptr;
-                continue;
-            } else if (NULL != rulePos->alt) {
-                rulePos = rulePos->alt;
-                continue;
-            } else {
-                break;
-            }
-        } else {
-            dbgmsg(" does not match char type %d.\n", rulePos->type);
-            if (NULL == rulePos->alt) {
-                return { LangTokenType::Error, -1 };
-            } else {
-                rulePos = rulePos->alt;
-                continue;
-            }
-        }
+        lang_abstract_parse_char({
+            case LangCharType::NoteName: {
+                val = note_to_midi(ch);
+            } break;
+            case LangCharType::Minus: {
+                octaveSign = -1;
+            } break;
+            case LangCharType::Digit: {
+                octave = atoi(&ch) * 12;
+            } break;
+            case LangCharType::SemitoneMod: {
+                val += ch == '#'? 1 : -1;
+            } break;
+            default: break;
+        });
     }
     octave *= octaveSign;
     val += octave;
