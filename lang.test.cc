@@ -8,6 +8,10 @@
 bool IS_DBG_MODE = false;
 #define dbgmsg(...) if (IS_DBG_MODE) printf(__VA_ARGS__)
 
+// Abstract call to malloc so that we can implement our own
+// memory manager in the future if desired.
+#define mem(TYPE, SIZE) (TYPE *)malloc(SIZE * sizeof(TYPE))
+
 #include "test.h"
 #include "lang.cc"
 
@@ -98,6 +102,21 @@ int main()
         prim = lang_parse_length(buf);
         test((int)prim.type).eq((int)LangTokenType::LengthTriplet);
     })
+
+    test_case("list of notes", {
+        strcpy(buf, "(c3 d3 e3)");
+        LangList list;
+        setup(list, 3);
+        lang_parse_list(buf, list);
+        test((int)list.primitives[0].type).eq((int)LangTokenType::Note);
+        test((int)list.primitives[1].type).eq((int)LangTokenType::Note);
+        test((int)list.primitives[2].type).eq((int)LangTokenType::Note);
+
+        test((int)list.primitives[0].type).eq(60);
+        test((int)list.primitives[1].type).eq(62);
+        test((int)list.primitives[2].type).eq(64);
+    });
+
     printf("\n\nTests completed :)\n\n");
     return 0;
 }

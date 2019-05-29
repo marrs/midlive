@@ -149,7 +149,7 @@ struct LangLenToken {
             switch (rulePos->type) SWITCH_CASES \
             if (NULL != rulePos->next) { \
                 rulePos = rulePos->next; \
-                ++bufptr; \
+                ++buf; \
                 continue; \
             } else if (NULL != rulePos->alt) { \
                 rulePos = rulePos->alt; \
@@ -184,10 +184,9 @@ lang_parse_length_default:
     char lenStr[2];
     int lenVal = -1;
     LangTokenType type = LangTokenType::LengthNormal;
-    char *bufptr = buf;
 
-    lang_scan_token(bufptr) {
-        char ch = *bufptr;
+    lang_scan_token(buf) {
+        char ch = *buf;
         char *lenValPos = lenStr;
         lang_abstract_parse_char({
             case LangCharLenType::Pos1:
@@ -225,9 +224,8 @@ LangPrimitive lang_parse_note(char *buf)
     int val = -1;
     int octave = 0;
     int octaveSign = 1;
-    char *bufptr = buf;
-    lang_scan_token(bufptr) {
-        char ch = *bufptr;
+    lang_scan_token(buf) {
+        char ch = *buf;
         lang_abstract_parse_char({
             case LangCharType::NoteName: {
                 val = note_to_midi(ch);
@@ -250,4 +248,41 @@ LangPrimitive lang_parse_note(char *buf)
         return { LangTokenType::Note, val };
     }
     return { LangTokenType::Error, val };
+}
+
+struct LangList {
+    LangPrimitive *primitives;
+    size_t len;
+    LangPrimitive *ptr;
+};
+
+void setup(LangList &list, size_t len)
+{
+    list.primitives = mem(LangPrimitive, len);
+    list.len = len;
+    list.ptr = list.primitives;
+}
+
+void lang_parse_list(char *buf, LangList &list)
+{
+    if (!is_char_type(LangCharType::ListBegin, *buf)) {
+        return; // TODO?: Return LangList
+    }
+
+    char *bufptr = buf;
+    lang_scan_token(bufptr) {
+        printf("%c", *bufptr);
+        if (is_char_type(LangCharType::Letter, *bufptr)) {
+            LangPrimitive primitive = lang_parse_note(bufptr++);
+            ++bufptr;
+            memcpy(list.primitives++, &primitive, sizeof(LangPrimitive));
+        } else if(is_char_type(LangCharType::Digit, *bufptr)) {
+            LangPrimitive primitive = lang_parse_length(bufptr++);
+            memcpy(list.primitives++, &primitive, sizeof(LangPrimitive));
+        } else if(is_char_type(LangCharType::ListEnd, *bufptr)) {
+            ++bufptr;
+            break;
+        }
+        ++bufptr;
+    }
 }
