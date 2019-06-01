@@ -1,3 +1,3 @@
-alias m='clang++ -std=c++11 lang.test.cc'
+alias m='clang++ -std=c++11 -glldb lang.test.cc'
 alias r='./a.out'
 alias mr='m && r'

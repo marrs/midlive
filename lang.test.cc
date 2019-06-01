@@ -104,19 +104,19 @@ int main()
     })
 
     test_case("list of notes", {
-        strcpy(buf, "(c3 d3 e3)");
+        strcpy(buf, "(c3 d4 e5)");
         LangList list;
         setup(list, 3);
         lang_parse_list(buf, list);
         test((int)list.primitives[0].type).eq((int)LangTokenType::Note);
+        test((int)list.primitives[0].val).eq(60);
+
         test((int)list.primitives[1].type).eq((int)LangTokenType::Note);
+        test((int)list.primitives[1].val).eq(74);
+
         test((int)list.primitives[2].type).eq((int)LangTokenType::Note);
-
-        test((int)list.primitives[0].type).eq(60);
-        test((int)list.primitives[1].type).eq(62);
-        test((int)list.primitives[2].type).eq(64);
+        test((int)list.primitives[2].val).eq(88);
     });
-
-    printf("\n\nTests completed :)\n\n");
+    printf("\n\n\tTests completed :)\n\n");
     return 0;
 }

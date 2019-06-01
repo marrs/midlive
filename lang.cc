@@ -136,11 +136,11 @@ struct LangLenToken {
     LangLenToken *alt; // Alternative to try if this type does not match
 };
 
-#define lang_scan_token(CHPTR) \
-    while (*(CHPTR) != '\0'    \
-    &&     *(CHPTR) != '\t'    \
-    &&     *(CHPTR) != '\n'    \
-    &&     *(CHPTR) != ' ')
+#define is_whitespace_char(CHR) \
+    ((CHR) == '\0'   \
+||  (CHR) == '\t'   \
+||  (CHR) == '\n'   \
+||  (CHR) == ' ')
 
 #define lang_abstract_parse_char(SWITCH_CASES) \
         dbgmsg("Character '%c'", ch); \
@@ -149,7 +149,7 @@ struct LangLenToken {
             switch (rulePos->type) SWITCH_CASES \
             if (NULL != rulePos->next) { \
                 rulePos = rulePos->next; \
-                ++buf; \
+                ++*buf; \
                 continue; \
             } else if (NULL != rulePos->alt) { \
                 rulePos = rulePos->alt; \
@@ -167,9 +167,9 @@ struct LangLenToken {
             } \
         }
 
-LangPrimitive lang_parse_length(char *buf)
+LangPrimitive lang_parse_length(char **buf)
 {
-    if (!is_char_type(LangCharType::Digit, *buf)) {
+    if (!is_char_type(LangCharType::Digit, **buf)) {
 lang_parse_length_default:
         return { LangTokenType::Error, -1};
     }
@@ -185,8 +185,8 @@ lang_parse_length_default:
     int lenVal = -1;
     LangTokenType type = LangTokenType::LengthNormal;
 
-    lang_scan_token(buf) {
-        char ch = *buf;
+    while(!is_whitespace_char(**buf)) {
+        char ch = **buf;
         char *lenValPos = lenStr;
         lang_abstract_parse_char({
             case LangCharLenType::Pos1:
@@ -207,9 +207,20 @@ lang_parse_length_default:
     return { type, lenVal };
 }
 
-LangPrimitive lang_parse_note(char *buf)
+inline LangPrimitive lang_parse_length(char *buf)
 {
-    if (!is_char_type(LangCharType::Letter, *buf)) {
+    char **bufptr = &buf;
+    return lang_parse_length(bufptr);
+}
+
+inline bool lang_last_char_check(char *chptr, char *lastChar)
+{
+    return nullptr == lastChar? true : chptr != lastChar;
+}
+
+LangPrimitive lang_parse_note(char **buf, char *lastChar = nullptr)
+{
+    if (!is_char_type(LangCharType::Letter, **buf)) {
         return { LangTokenType::Error, -1};
     }
 
@@ -224,8 +235,11 @@ LangPrimitive lang_parse_note(char *buf)
     int val = -1;
     int octave = 0;
     int octaveSign = 1;
-    lang_scan_token(buf) {
-        char ch = *buf;
+
+
+    bool lastCharCheck = nullptr != lastChar? *buf != lastChar : true;
+    while(!is_whitespace_char(**buf) && lang_last_char_check(*buf, lastChar)) {
+        char ch = **buf;
         lang_abstract_parse_char({
             case LangCharType::NoteName: {
                 val = note_to_midi(ch);
@@ -250,6 +264,12 @@ LangPrimitive lang_parse_note(char *buf)
     return { LangTokenType::Error, val };
 }
 
+inline LangPrimitive lang_parse_note(char *buf)
+{
+    char **bufptr = &buf;
+    return lang_parse_note(bufptr);
+}
+
 struct LangList {
     LangPrimitive *primitives;
     size_t len;
@@ -268,21 +288,38 @@ void lang_parse_list(char *buf, LangList &list)
     if (!is_char_type(LangCharType::ListBegin, *buf)) {
         return; // TODO?: Return LangList
     }
+    ++buf;
+    char *lastChar = buf;
 
-    char *bufptr = buf;
-    lang_scan_token(bufptr) {
-        printf("%c", *bufptr);
-        if (is_char_type(LangCharType::Letter, *bufptr)) {
-            LangPrimitive primitive = lang_parse_note(bufptr++);
-            ++bufptr;
-            memcpy(list.primitives++, &primitive, sizeof(LangPrimitive));
-        } else if(is_char_type(LangCharType::Digit, *bufptr)) {
-            LangPrimitive primitive = lang_parse_length(bufptr++);
-            memcpy(list.primitives++, &primitive, sizeof(LangPrimitive));
-        } else if(is_char_type(LangCharType::ListEnd, *bufptr)) {
-            ++bufptr;
-            break;
+    for (; !is_char_type(LangCharType::ListEnd, *lastChar); ++lastChar) {}
+    while (true) {
+        char **bufptr = &buf;
+        if (is_char_type(LangCharType::Letter, *buf)) {
+            LangPrimitive primitive = lang_parse_note(bufptr, lastChar);
+            if (LangTokenType::Error == primitive.type) {
+                if (is_char_type(LangCharType::ListEnd, *buf)) {
+                    memcpy(list.ptr, &primitive, sizeof(LangPrimitive));
+                    goto Finalise_list;
+                }
+            }
+            memcpy(list.ptr, &primitive, sizeof(LangPrimitive));
+            list.ptr++;
+        } else if(is_char_type(LangCharType::Digit, **bufptr)) {
+            LangPrimitive primitive = lang_parse_length(bufptr);
+            if (LangTokenType::Error == primitive.type) {
+                if (is_char_type(LangCharType::ListEnd, *buf)) {
+                    goto Finalise_list;
+                }
+            }
+            memcpy(list.ptr++, &primitive, sizeof(LangPrimitive));
+        } else if(is_char_type(LangCharType::ListEnd, **bufptr)) {
+            goto Finalise_list;
+        } else if(is_whitespace_char(*buf)) {
+            ++buf;
+            continue;
         }
-        ++bufptr;
     }
+
+Finalise_list:
+    return;
 }

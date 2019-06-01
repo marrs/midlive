@@ -53,6 +53,8 @@ chords:     notes or intervals joined without spaces (e.g. c3e3bg3 .0.3.7)
 length:     integer, optionally followed by letter to denote a dotted, or
             triplet (e.g. 1 2 4 8 32 4t 2d).
 rhythm:     beat (o) or rest (x) (e.g. ooox = beat beat beat rest)
+            This plays whatever is in the note buffer when it is triggered.
+            Rhythm lengths override note lengths.
 bpm:        integer followed immediately by bpm (e.g. 120bpm)
 lists:      any type between parentheses; lists are ordered
             e.g. (1 2 3 4).
@@ -72,7 +74,11 @@ following a rest"
 "Combinators"
 """""""""""""
 
-$a zip $b:  Merge each element of list $a with list $b
+$a zip $b:  Place the 1st element of list $b after the 1st element of list $a,
+            the 2nd after the 2nd, and so on until the lists have been traversed.
+            If the lists are of different lengths, the shorter list is looped.
+$a sync $b: The lists are merged such that the timing of each element is preserved.
+            In order to have `sync`, you *must* have `chords`.
 $a perm $b: Permutate every element of list $b with each element of list
             $a
 $a => $b:   Put $a to $b.  This combinator is used to create new
