@@ -34,6 +34,8 @@ and so are most OOP features, such as private members, RAII, and so on.
 These aren't hard and fast rules.  Read the code to better understand
 it.
 
+There are aliases available to help with compiling for both clang and gcc.
+
 Licence
 -------
 

@@ -1,0 +1,3 @@
+alias m='g++ -std=c++11 -g lang.test.cc'
+alias r='./a.out'
+alias mr='m && r'
