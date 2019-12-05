@@ -13,10 +13,11 @@ enum struct LangCharType {  // The actual char that can appear in buffer
     BlockEnd        =  0x800,
 };
 
+// Length can have at most 2 digits followed by a length modifier.
 enum struct LangCharLenType {
     Error          = 0x000,
-    Pos1           = 0x001,
-    Pos2           = 0x002,
+    Digit1         = 0x001,
+    Digit2         = 0x002,
     LengthMod      = 0x004,
 };
 
@@ -38,10 +39,10 @@ int lang_char_len_pos(char &x) {
     switch (x) {
         case '1':
         case '3':
-        case '8': return (int)LangCharLenType::Pos1;
+        case '8': return (int)LangCharLenType::Digit1;
         case '2':
         case '4':
-        case '6': return (int)LangCharLenType::Pos1 | (int)LangCharLenType::Pos2;
+        case '6': return (int)LangCharLenType::Digit1 | (int)LangCharLenType::Digit2;
         case 'd': return (int)LangCharLenType::LengthMod;
         case 't': return (int)LangCharLenType::LengthMod;
         default:  return (int)LangCharLenType::Error;
@@ -176,9 +177,9 @@ lang_parse_length_default:
     }
 
     LangLenToken parseRules[3] = {
-        { LangCharLenType::Pos1,      &parseRules[1], NULL           }, // 0
-        { LangCharLenType::Pos2,      NULL,           &parseRules[2] }, // 1
-        { LangCharLenType::LengthMod, NULL,           NULL           }, // 2
+        { LangCharLenType::Digit1,      &parseRules[1], NULL           }, // 0
+        { LangCharLenType::Digit2,      NULL,           &parseRules[2] }, // 1
+        { LangCharLenType::LengthMod,   NULL,           NULL           }, // 2
     };
 
     LangLenToken *rulePos = parseRules;
@@ -190,8 +191,8 @@ lang_parse_length_default:
         char ch = **buf;
         char *lenValPos = lenStr;
         lang_abstract_parse_char({
-            case LangCharLenType::Pos1:
-            case LangCharLenType::Pos2: {
+            case LangCharLenType::Digit1:
+            case LangCharLenType::Digit2: {
                 *lenValPos++ = ch;
             } break;
             case LangCharLenType::LengthMod: {
