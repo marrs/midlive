@@ -42,7 +42,7 @@ instrument."
 "Primitives"
 """"""""""""
 
-notes:      letter (a-g) optionally followed by number denoting octave,
+pitches:    letter (a-g) optionally followed by number denoting octave,
             optionally followed by sharp/flat modifier (e.g. g3 c4 a1, f3#,
             e2b)
 intervals:  number preceded by . and optionally followed by + or - number of
@@ -59,6 +59,8 @@ bpm:        integer followed immediately by bpm (e.g. 120bpm)
 lists:      any type between parentheses; lists are ordered
             e.g. (1 2 3 4).
 buffers:    string preceded by $
+notes:      combination of pitch or interval, and length (e.g. 4.c3 6d.d2 4.3)
+
 
 "At 80bpm, crotchets follow."
 (80bpm 4 c3 e3 g3 c4 x g3 e3 c3)

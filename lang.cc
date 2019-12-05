@@ -22,10 +22,11 @@ enum struct LangCharLenType {
 
 enum struct LangTokenType {
     Error           = 0x000,
-    Note            = 0x001,
+    Pitch           = 0x001,
     LengthNormal    = 0x002,
     LengthDotted    = 0x004,
     LengthTriplet   = 0x008,
+    Note            = 0x010,
 };
 
 struct LangPrimitive {
@@ -109,7 +110,7 @@ bool is_char_type(LangCharLenType type, char ch)
     return (int)charType == ((int)type | charType);
 }
 
-int note_to_midi(char ch)
+int pitch_to_midi(char ch)
 {
     assert(is_char_type(LangCharType::NoteName, ch));
     switch (ch) {
@@ -218,7 +219,7 @@ inline bool lang_last_char_check(char *chptr, char *lastChar)
     return nullptr == lastChar? true : chptr != lastChar;
 }
 
-LangPrimitive lang_parse_note(char **buf, char *lastChar = nullptr)
+LangPrimitive lang_parse_pitch(char **buf, char *lastChar = nullptr)
 {
     if (!is_char_type(LangCharType::Letter, **buf)) {
         return { LangTokenType::Error, -1};
@@ -242,7 +243,7 @@ LangPrimitive lang_parse_note(char **buf, char *lastChar = nullptr)
         char ch = **buf;
         lang_abstract_parse_char({
             case LangCharType::NoteName: {
-                val = note_to_midi(ch);
+                val = pitch_to_midi(ch);
             } break;
             case LangCharType::Minus: {
                 octaveSign = -1;
@@ -259,9 +260,24 @@ LangPrimitive lang_parse_note(char **buf, char *lastChar = nullptr)
     octave *= octaveSign;
     val += octave;
     if (-1 < val && val < 128) {
-        return { LangTokenType::Note, val };
+        return { LangTokenType::Pitch, val };
     }
     return { LangTokenType::Error, val };
+}
+
+inline LangPrimitive lang_parse_pitch(char *buf)
+{
+    char **bufptr = &buf;
+    return lang_parse_pitch(bufptr);
+}
+
+LangPrimitive lang_parse_note(char **buf, char *lastChar = nullptr)
+{
+    // TODO: Refactor parse rules for pitch and length
+    // so that we can reuse them for construction of
+    // parse rules for note (which is basically length
+    // followed by noted.  Parse rules should probably
+    // go in their own module or struct.
 }
 
 inline LangPrimitive lang_parse_note(char *buf)
@@ -295,7 +311,7 @@ void lang_parse_list(char *buf, LangList &list)
     while (true) {
         char **bufptr = &buf;
         if (is_char_type(LangCharType::Letter, *buf)) {
-            LangPrimitive primitive = lang_parse_note(bufptr, lastChar);
+            LangPrimitive primitive = lang_parse_pitch(bufptr, lastChar);
             if (LangTokenType::Error == primitive.type) {
                 if (is_char_type(LangCharType::ListEnd, *buf)) {
                     memcpy(list.ptr, &primitive, sizeof(LangPrimitive));
