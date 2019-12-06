@@ -1,16 +1,17 @@
 enum struct LangCharType {  // The actual char that can appear in buffer
-    Error           =  0x000,
-    SemitoneMod     =  0x001,
-    NoteName        =  0x002,
-    Letter          =  0x004,
-    Digit           =  0x010,
-    Minus           =  0x020,
-    Symbol          =  0x040,
-    Quote           =  0x080,
-    ListBegin       =  0x100,
-    ListEnd         =  0x200,
-    BlockBegin      =  0x400,
-    BlockEnd        =  0x800,
+    Error             = 0x0000,
+    SemitoneMod       = 0x0001,
+    NoteName          = 0x0002,
+    Letter            = 0x0004,
+    Digit             = 0x0010,
+    Minus             = 0x0020,
+    Symbol            = 0x0040,
+    Quote             = 0x0080,
+    ListBegin         = 0x0100,
+    ListEnd           = 0x0200,
+    BlockBegin        = 0x0400,
+    BlockEnd          = 0x0800,
+    LengthPitchConcat = 0x1000,
 };
 
 // Length can have at most 2 digits followed by a length modifier.
@@ -30,10 +31,49 @@ enum struct LangTokenType {
     Note            = 0x010,
 };
 
-struct LangPrimitive {
-    enum LangTokenType type;
-    int val;
+enum struct LangErrorType {
+    None                = 0x000,
+    InvalidLengthChar   = 0x001,
+    InvalidPitchChar    = 0x002,
+    InvalidVelocityChar = 0x004,
+    OutOfBoundsPitch    = 0x008,
+    OutOfBoundsLength   = 0x010,
+    OutOfBoundsVelocity = 0x020,
 };
+
+enum LengthMod {
+    Normal = 0, Dotted, Triplet
+};
+
+// LangPrimitive should contain all values that will eventually be converted to midi.
+// These include length, pitch, and velocity.
+//
+// Within the primitive, length is the combination of length and modifier. The final
+// midi length value will be calculated during convesion to midi.
+//
+// Unrepresented values are represented with a -1
+struct LangPrimitive {
+    LangErrorType error = LangErrorType::None;
+    int pitch           = -1;
+    int length          = -1;
+    LengthMod lengthMod = LengthMod::Normal;
+    int velocity        = -1;
+};
+
+bool is_only_pitch(LangPrimitive &prim)
+{
+    return prim.pitch > -1 && prim.length == -1 && prim.velocity == -1;
+}
+
+bool is_only_length(LangPrimitive &prim)
+{
+    return prim.length > -1 && prim.pitch == -1 && prim.velocity == -1;
+}
+
+bool is_only_velocity(LangPrimitive &prim)
+{
+    return prim.velocity > -1 && prim.pitch == -1 && prim.length == -1;
+}
 
 int lang_char_len_pos(char &x) {
     switch (x) {
@@ -94,7 +134,7 @@ int lang_char_type(char &x) {
         case ')': return (int)LangCharType::Symbol | (int)LangCharType::ListEnd;
         case '{': return (int)LangCharType::Symbol | (int)LangCharType::BlockBegin;
         case '}': return (int)LangCharType::Symbol | (int)LangCharType::BlockEnd;
-        case '.': return (int)LangCharType::Symbol;
+        case '.': return (int)LangCharType::Symbol | (int)LangCharType::LengthPitchConcat;
     }
     return (int)LangCharType::Error;
 }
@@ -144,7 +184,7 @@ struct LangLenToken {
 ||  (CHR) == '\n'   \
 ||  (CHR) == ' ')
 
-#define lang_abstract_parse_char(SWITCH_CASES) \
+#define lang_abstract_parse_char(prim, SWITCH_CASES) \
         dbgmsg("Character '%c'", ch); \
         if (is_char_type(rulePos->type, ch)) { \
             dbgmsg(" matches char type %d\n", rulePos->type); \
@@ -162,7 +202,7 @@ struct LangLenToken {
         } else { \
             dbgmsg(" does not match char type %d.\n", rulePos->type); \
             if (NULL == rulePos->alt) { \
-                return { LangTokenType::Error, -1 }; \
+                return prim; \
             } else { \
                 rulePos = rulePos->alt; \
                 continue; \
@@ -171,9 +211,11 @@ struct LangLenToken {
 
 LangPrimitive lang_parse_length(char **buf)
 {
+    LangPrimitive prim;
     if (!is_char_type(LangCharType::Digit, **buf)) {
 lang_parse_length_default:
-        return { LangTokenType::Error, -1};
+        prim.error = LangErrorType::InvalidLengthChar;
+        return prim;
     }
 
     LangLenToken parseRules[3] = {
@@ -190,23 +232,23 @@ lang_parse_length_default:
     while(!is_whitespace_char(**buf)) {
         char ch = **buf;
         char *lenValPos = lenStr;
-        lang_abstract_parse_char({
+        lang_abstract_parse_char(prim, {
             case LangCharLenType::Digit1:
             case LangCharLenType::Digit2: {
                 *lenValPos++ = ch;
             } break;
             case LangCharLenType::LengthMod: {
                 if ('d' == ch) {
-                    type = LangTokenType::LengthDotted;
+                    prim.lengthMod = LengthMod::Dotted;
                 } else if ('t' == ch) {
-                    type = LangTokenType::LengthTriplet;
+                    prim.lengthMod = LengthMod::Triplet;
                 }
             } break;
             default: { goto lang_parse_length_default; }
         });
     }
-    lenVal = atoi(lenStr);
-    return { type, lenVal };
+    prim.length = atoi(lenStr);
+    return prim;
 }
 
 inline LangPrimitive lang_parse_length(char *buf)
@@ -222,8 +264,10 @@ inline bool lang_last_char_check(char *chptr, char *lastChar)
 
 LangPrimitive lang_parse_pitch(char **buf, char *lastChar = nullptr)
 {
+    LangPrimitive prim;
     if (!is_char_type(LangCharType::Letter, **buf)) {
-        return { LangTokenType::Error, -1};
+        prim.error = LangErrorType::InvalidPitchChar;
+        return prim;
     }
 
     LangToken parseRules[4] = {
@@ -234,7 +278,6 @@ LangPrimitive lang_parse_pitch(char **buf, char *lastChar = nullptr)
     };
 
     LangToken *rulePos = parseRules;
-    int val = -1;
     int octave = 0;
     int octaveSign = 1;
 
@@ -242,9 +285,9 @@ LangPrimitive lang_parse_pitch(char **buf, char *lastChar = nullptr)
     bool lastCharCheck = nullptr != lastChar? *buf != lastChar : true;
     while(!is_whitespace_char(**buf) && lang_last_char_check(*buf, lastChar)) {
         char ch = **buf;
-        lang_abstract_parse_char({
+        lang_abstract_parse_char(prim, {
             case LangCharType::NoteName: {
-                val = pitch_to_midi(ch);
+                prim.pitch = pitch_to_midi(ch);
             } break;
             case LangCharType::Minus: {
                 octaveSign = -1;
@@ -253,17 +296,18 @@ LangPrimitive lang_parse_pitch(char **buf, char *lastChar = nullptr)
                 octave = atoi(&ch) * 12;
             } break;
             case LangCharType::SemitoneMod: {
-                val += ch == '#'? 1 : -1;
+                prim.pitch += ch == '#'? 1 : -1;
             } break;
             default: break;
         });
     }
     octave *= octaveSign;
-    val += octave;
-    if (-1 < val && val < 128) {
-        return { LangTokenType::Pitch, val };
+    prim.pitch += octave;
+    if (-1 < prim.pitch && prim.pitch < 128) {
+        return prim;
     }
-    return { LangTokenType::Error, val };
+    prim.error = LangErrorType::OutOfBoundsPitch;
+    return prim;
 }
 
 inline LangPrimitive lang_parse_pitch(char *buf)
@@ -274,11 +318,17 @@ inline LangPrimitive lang_parse_pitch(char *buf)
 
 LangPrimitive lang_parse_note(char **buf, char *lastChar = nullptr)
 {
-    // TODO: Refactor parse rules for pitch and length
-    // so that we can reuse them for construction of
-    // parse rules for note (which is basically length
-    // followed by noted.  Parse rules should probably
-    // go in their own module or struct.
+    int posPitch = -1;
+    // Note is a length followed by a dot followed by a pitch.
+    // TODO:
+    // * Parse buffer for correctness. Record location of parts as you go
+    // * Put everything before dot into temp buffer to be sent do length parser
+    // TODO
+    // * If char begin with a length, send it off to be processed for length.
+    //   * Then send it off to be processed for pitch.
+    // * If char begins with a pitch, it's not a note or can we work out the
+    //   length?
+    //
 }
 
 inline LangPrimitive lang_parse_note(char *buf)
@@ -300,6 +350,10 @@ void setup(LangList &list, size_t len)
     list.ptr = list.primitives;
 }
 
+inline bool is_ok(LangErrorType error) {
+    return error == LangErrorType::None;
+}
+
 void lang_parse_list(char *buf, LangList &list)
 {
     if (!is_char_type(LangCharType::ListBegin, *buf)) {
@@ -313,7 +367,7 @@ void lang_parse_list(char *buf, LangList &list)
         char **bufptr = &buf;
         if (is_char_type(LangCharType::Letter, *buf)) {
             LangPrimitive primitive = lang_parse_pitch(bufptr, lastChar);
-            if (LangTokenType::Error == primitive.type) {
+            if (is_ok(primitive.error)) {
                 if (is_char_type(LangCharType::ListEnd, *buf)) {
                     memcpy(list.ptr, &primitive, sizeof(LangPrimitive));
                     goto Finalise_list;
@@ -323,9 +377,12 @@ void lang_parse_list(char *buf, LangList &list)
             list.ptr++;
         } else if(is_char_type(LangCharType::Digit, **bufptr)) {
             LangPrimitive primitive = lang_parse_length(bufptr);
-            if (LangTokenType::Error == primitive.type) {
+            if (is_ok(primitive.error)) {
                 if (is_char_type(LangCharType::ListEnd, *buf)) {
                     goto Finalise_list;
+                }
+                if (is_char_type(LangCharType::LengthPitchConcat, *buf)) {
+                    // TODO: next part should be a pitch
                 }
             }
             memcpy(list.ptr++, &primitive, sizeof(LangPrimitive));

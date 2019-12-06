@@ -1,8 +1,10 @@
 struct ExTestInt { int left; int right; };
 struct ExTestStr { char *left; char *right; };
+struct ExTestBool { bool left; bool right; };
 
 union test {
     int iVal;
+    bool bVal;
     char *sVal;
 
     test(int x)
@@ -13,6 +15,11 @@ union test {
     test(char *x)
     {
         sVal = x;
+    }
+
+    test(bool *x)
+    {
+        bVal = x;
     }
 
     void eq(int x)
@@ -33,8 +40,18 @@ union test {
             throw ExTestStr {sVal, x};
         }
     }
+
+    void eq(bool x)
+    {
+        bool result = bVal == x;
+        if (!result) {
+            printf("\n  %d does not equal %d\n", bVal, x);
+            throw ExTestBool {bVal, x};
+        }
+    }
 };
 
 #define test_case(DESC, BLOCK) printf("\n%s\t",DESC); try BLOCK \
     catch (ExTestInt x) { assert(x.left == x.right); } \
-    catch (ExTestStr x) { assert(x.left == x.right); }
+    catch (ExTestStr x) { assert(x.left == x.right); } \
+    catch (ExTestBool x) { assert(x.left == x.right); }
